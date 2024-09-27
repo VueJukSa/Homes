@@ -2,15 +2,36 @@ import Vue from "vue";
 import Vuex from "vuex";
 import http from "@/util/http-common.js";
 import createPersistedState from "vuex-persistedstate";
-
+import {
+  makeHouseSimpleObject,
+  makeHouseDetailObject,
+} from "@/util/houseObject.js";
 Vue.use(Vuex);
+import memberStore from "@/store/modules/memberStore.js";
+import boardStore from "@/store/modules/boardStore.js";
 
 export default new Vuex.Store({
   state: {
-    sidos: [{ value: null, text: "선택하세요" }],
-    guguns: [{ value: null, text: "선택하세요" }],
-    houseCodes: [{ value: null, text: "선택하세요" }],
-    houses: [],
+    sidos: [{ value: null, text: "시" }],
+    guguns: [{ value: null, text: "구" }],
+    dongs: [{ value: null, text: "동" }],
+    houseCodes: [{ value: null, text: "집종류" }],
+    totalHouses: [],
+    // 매매
+    housesBuy: [],
+    // 전세
+    housesYear: [],
+    // 월세
+    housesMonth: [],
+
+    totalHousesforTable: [],
+    // 테이블용 간단 버전
+    housesfortableBuy: [],
+    // 테이블용 간단 버전
+    housesfortableYear: [],
+    // 테이블용 간단 버전
+    housesfortableMonth: [],
+
     house: null,
     userid: "",
   },
@@ -33,6 +54,14 @@ export default new Vuex.Store({
         });
       });
     },
+    GET_DONG_LIST(state, dongs) {
+      dongs.forEach((dong) => {
+        state.dongs.push({
+          value: dong.dongCode,
+          text: dong.dongName,
+        });
+      });
+    },
     GET_HOUSE_CODE_LIST(state, houseCodes) {
       houseCodes.forEach((houseCode) => {
         state.houseCodes.push({
@@ -43,18 +72,53 @@ export default new Vuex.Store({
     },
 
     CLEAR_GUGUN_LIST(state) {
-      state.guguns = [{ value: null, text: "선택하세요" }];
+      state.guguns = [{ value: null, text: "구" }];
     },
     CLEAR_SIDO_LIST(state) {
-      state.sidos = [{ value: null, text: "선택하세요" }];
+      state.sidos = [{ value: null, text: "시" }];
+    },
+    CLEAR_DONG_LIST(state) {
+      state.dongs = [{ value: null, text: "동" }];
     },
     CLEAR_HOUSE_CODE_LIST(state) {
-      state.houseCodes = [{ value: null, text: "선택하세요" }];
+      state.houseCodes = [{ value: null, text: "집종류" }];
+    },
+    CLEAR_HOUSE(state) {
+      state.house = null;
+    },
+    CLEAR_TOTAL_HOUSE_SIMPLE_LIST(state) {
+      state.totalHouses = [];
+    },
+    CLEAR_TOTAL_HOUSE_DETAIL_LIST(state) {
+      state.totalHousesforTable = [];
     },
 
-    SET_HOUSE_LIST(state, houses) {
-      state.houses = houses;
+    SET_HOUSE_DETAIL_LIST_BUY(state, houses) {
+      state.housesBuy = houses;
+      state.totalHouses = state.totalHouses.concat(houses);
     },
+    SET_HOUSE_DETAIL_LIST_YEAR(state, houses) {
+      state.housesYear = houses;
+      state.totalHouses = state.totalHouses.concat(houses);
+    },
+    SET_HOUSE_DETAIL_LIST_MONTH(state, houses) {
+      state.housesMonth = houses;
+      state.totalHouses = state.totalHouses.concat(houses);
+    },
+
+    SET_HOUSE_SIMPLE_LIST_BUY(state, houses) {
+      state.housesfortableBuy = houses;
+      state.totalHousesforTable = state.totalHousesforTable.concat(houses);
+    },
+    SET_HOUSE_SIMPLE_LIST_YEAR(state, houses) {
+      state.housesfortableYear = houses;
+      state.totalHousesforTable = state.totalHousesforTable.concat(houses);
+    },
+    SET_HOUSE_SIMPLE_LIST_MONTH(state, houses) {
+      state.housesfortableMonth = houses;
+      state.totalHousesforTable = state.totalHousesforTable.concat(houses);
+    },
+
     SET_DETAIL_HOUSE(state, house) {
       state.house = house;
     },
@@ -88,6 +152,18 @@ export default new Vuex.Store({
           console.log(error);
         });
     },
+    getDong({ commit }, gugunCode) {
+      const params = { gugun: gugunCode };
+      http
+        .get(`/map/dong`, { params })
+        .then((response) => {
+          //2. 비동기 진행 후 해당 데이터를 뮤테이션에게 넘김
+          commit("GET_DONG_LIST", response.data);
+        })
+        .catch((error) => {
+          console.log(error);
+        });
+    },
 
     getHouseCode({ commit }) {
       const params = {};
@@ -102,21 +178,106 @@ export default new Vuex.Store({
         });
     },
 
-    getHouseList({ commit }, gugunCode, sidoCode, houseCode) {
-      // const KEY = process.env.VUE_APP_APT_DEAL_API_KEY;
-
-      // 수정해야함
-      const KEY = `fSoOVDMB7t8UixqTl6RO4oG86zqwigHcHDarqzeT4kSmNVf4ouJdt86NDF6sk6jXI9ax%2B7W0Q0RmA%2BJZnLIonA%3D%3D`;
-      const URL = `http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev`;
+    // 매매
+    getHouseBuy({ commit }, searchInfo) {
       const params = {
-        LAWD_CD: gugunCode,
-        DEAL_YMD: "202110",
-        serviceKey: decodeURIComponent(KEY),
+        dong: searchInfo[0],
+        houseCode: searchInfo[1],
+        contract: searchInfo[2],
       };
+
+      let houseType;
+
+      if (searchInfo[1] == 1) {
+        houseType = `apt`;
+      } else if (searchInfo[1] == 2) {
+        houseType = `office`;
+      } else if (searchInfo[1] == 3) {
+        houseType = `yeonrip`;
+      } else {
+        houseType = `dandok`;
+      }
+
       http
-        .get(URL, { params })
+        .get(`/map/houselist/${houseType}`, { params })
         .then((response) => {
-          commit("SET_HOUSE_LIST", response.data.response.body.items.item);
+          console.log(response.data);
+          //2. 비동기 진행 후 해당 데이터를 뮤테이션에게 넘김
+          let simple = [];
+          let detail = [];
+          response.data.forEach((house) => {
+            simple.push(makeHouseSimpleObject(house, houseType));
+            detail.push(makeHouseDetailObject(house, houseType));
+          });
+          commit("SET_HOUSE_SIMPLE_LIST_BUY", simple);
+          commit("SET_HOUSE_DETAIL_LIST_BUY", detail);
+        })
+        .catch((error) => {
+          console.log(error);
+        });
+    },
+    getHouseYear({ commit }, searchInfo) {
+      const params = {
+        dong: searchInfo[0],
+        houseCode: searchInfo[1],
+        contract: searchInfo[2],
+      };
+      let houseType;
+
+      if (searchInfo[1] == 1) {
+        houseType = `apt`;
+      } else if (searchInfo[1] == 2) {
+        houseType = `office`;
+      } else if (searchInfo[1] == 3) {
+        houseType = `yeonrip`;
+      } else {
+        houseType = `dandok`;
+      }
+      http
+        .get(`/map/houselist/${houseType}`, { params })
+        .then((response) => {
+          //2. 비동기 진행 후 해당 데이터를 뮤테이션에게 넘김
+          let simple = [];
+          let detail = [];
+          response.data.forEach((house) => {
+            simple.push(makeHouseSimpleObject(house, houseType));
+            detail.push(makeHouseDetailObject(house, houseType));
+          });
+          commit("SET_HOUSE_SIMPLE_LIST_YEAR", simple);
+          commit("SET_HOUSE_DETAIL_LIST_YEAR", detail);
+        })
+        .catch((error) => {
+          console.log(error);
+        });
+    },
+    getHouseMonth({ commit }, searchInfo) {
+      const params = {
+        dong: searchInfo[0],
+        houseCode: searchInfo[1],
+        contract: searchInfo[2],
+      };
+      let houseType;
+
+      if (searchInfo[1] == 1) {
+        houseType = `apt`;
+      } else if (searchInfo[1] == 2) {
+        houseType = `office`;
+      } else if (searchInfo[1] == 3) {
+        houseType = `yeonrip`;
+      } else {
+        houseType = `dandok`;
+      }
+      http
+        .get(`/map/houselist/${houseType}`, { params })
+        .then((response) => {
+          let simple = [];
+          let detail = [];
+          response.data.forEach((house) => {
+            simple.push(makeHouseSimpleObject(house, houseType));
+            detail.push(makeHouseDetailObject(house, houseType));
+          });
+          commit("SET_HOUSE_SIMPLE_LIST_MONTH", simple);
+          commit("SET_HOUSE_DETAIL_LIST_MONTH", detail);
         })
         .catch((error) => {
           console.log(error);
@@ -126,10 +287,23 @@ export default new Vuex.Store({
       // 나중에는 일련번호로 집에대한 정보 가져와야한다
       commit("SET_DETAIL_HOUSE", house);
     },
-    login({ commit }, userid) {
-      commit("SET_USERID", userid);
+    houseListSum({ commit }) {
+      commit("SET_ALL_HOUSE_LIST");
     },
+    // login({ commit }, userid) {
+    //   commit("SET_USERID", userid);
+    // },
   },
-  modules: {},
-  plugins: [createPersistedState()],
+  modules: {
+    memberStore,
+    boardStore,
+  },
+  // plugins: [createPersistedState()],
+  plugins: [
+    createPersistedState({
+      // 브라우저 종료시 제거하기 위해 localStorage가 아닌 sessionStorage로 변경. (default: localStorage)
+      storage: sessionStorage,
+    }),
+  ],
 });
+// export default store;
